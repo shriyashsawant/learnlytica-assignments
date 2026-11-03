@@ -3,6 +3,19 @@
 Naming: `<day>a<session>` is the Assignment of that session, `<day>lb<n>` is Lab Assignment n of the day (two per session, numbered 1-8).
 Run any file with `python <name>.py` (needs scikit-learn, pandas, numpy, scipy, matplotlib).
 
+## Day 13 - ML Foundations for GenAI
+| File | Session | Title |
+| --- | --- | --- |
+| `13a1.py` | 1 | Assignment - Diagnose and Fix an Overfit Classifier |
+| `13lb1.py` | 1 | Lab 1 - Build & Evaluate Your First Classifier |
+| `13lb2.py` | 1 | Lab 2 - Train/Test Discipline & Cross-Validation |
+| `13a2.py` | 2 | Assignment - A Reusable, Leak-Free Pipeline on a New Dataset |
+| `13lb3.py` | 2 | Lab 1 - End-to-End Pipeline for Mixed-Type Data (ColumnTransformer) |
+| `13lb4.py` | 2 | Lab 2 - Hyperparameter Tuning & Leakage-Free CV (GridSearchCV) |
+| `13a3.py` | 3 | Assignment - Evaluate, Persist, and Serve a Classifier |
+| `13lb5.py` | 3 | Lab 1 - Evaluation Metrics from Scratch |
+| `13lb6.py` | 3 | Lab 2 - Model Persistence & Serving: Save, Reload & Serve with joblib |
+
 ## Day 15 - Model Selection & Tuning
 | File | Session | Title |
 | --- | --- | --- |
