@@ -16,6 +16,26 @@ Run any file with `python <name>.py` (needs scikit-learn, pandas, numpy, scipy, 
 | `13lb5.py` | 3 | Lab 1 - Evaluation Metrics from Scratch |
 | `13lb6.py` | 3 | Lab 2 - Model Persistence & Serving: Save, Reload & Serve with joblib |
 
+## Day 17 - Neural Networks & Deep Learning (lab assignments)
+| File | Session | Title |
+| --- | --- | --- |
+| `17lb1.py` | 1 | Lab 1 - Neural Net Building Blocks: Activations, Gradients & BCE Loss in NumPy |
+| `17lb2.py` | 1 | Lab 2 - Backprop by Hand: A 2-Layer MLP that Learns XOR |
+| `17lb3.py` | 2 | Lab 1 - The Output Layer: Numerically-Stable Softmax & Cross-Entropy |
+| `17lb4.py` | 2 | Lab 2 - The Training Loop: Gradient Descent & the Learning-Rate Regime |
+| `17lb5.py` | 3 | Lab 1 - Deploy the MLP Inference Path: relu + softmax Forward Pass in numpy |
+| `17lb6.py` | 3 | Lab 2 - Evaluate the Classifier: One-Hot, Confusion Matrix & Per-Class Recall |
+
+## Day 18 - Convolutional Neural Networks (lab assignments)
+| File | Session | Title |
+| --- | --- | --- |
+| `18lb1.py` | 1 | Lab 1 - The Convolution Engine: Valid 2D Conv, Output-Size Formula & a Vertical-Edge Detector |
+| `18lb2.py` | 1 | Lab 2 - The Feature-Map Pipeline: ReLU, 2x2 Max-Pooling & a conv->relu->pool Forward Pass |
+| `18lb3.py` | 2 | Lab 1 - The Parameter Budget: Count a CNN's Weights the VGG Way |
+| `18lb4.py` | 2 | Lab 2 - Trace the Feature Map: Spatial Sizes and MAC/FLOP Budgets |
+| `18lb5.py` | 3 | Lab 1 - Build a CNN Feature Extractor from Scratch (conv-relu-maxpool) |
+| `18lb6.py` | 3 | Lab 2 - im2col Convolution & the Raw-Pixel vs Conv-Feature Showdown |
+
 ## Day 15 - Model Selection & Tuning
 | File | Session | Title |
 | --- | --- | --- |
