@@ -1,60 +1,54 @@
 """Day 25 / Session 1 - Lab Assignment 2: Self- vs Cross-Attention & a Future-Leakage Audit."""
 import numpy as np
 
+X = np.array([[1., 0., 1., 0.],
+              [0., 1., 1., 0.],
+              [1., 1., 0., 1.]])                  # 3 tokens, d = 4
+ctx = np.array([[2., 0., 0., 1.],
+                [0., 2., 1., 0.],
+                [1., 1., 1., 1.],
+                [0., 0., 2., 2.],
+                [1., 0., 1., 0.]])                # 5 context tokens, d = 4
+
 
 def softmax(z, axis=-1):
     z = np.asarray(z, dtype=float)
-    e = np.exp(z - np.max(z, axis=axis, keepdims=True))
-    return e / np.sum(e, axis=axis, keepdims=True)
+    e = np.exp(z - np.max(z, axis=axis, keepdims=True))       # -inf -> 0, every slice sums to 1
+    return e / e.sum(axis=axis, keepdims=True)
 
 
-def attention(Q, K, V, mask=None):
-    Q = np.asarray(Q, dtype=float)
-    K = np.asarray(K, dtype=float)
-    V = np.asarray(V, dtype=float)
-    scores = Q @ K.T / np.sqrt(Q.shape[-1])
-    if mask is not None:
-        scores = scores + mask                               # additive mask: -inf blocks a position
-    weights = softmax(scores, axis=-1)
-    return weights @ V, weights
+def causal_mask(n):
+    mask = np.zeros((n, n))
+    mask[np.triu_indices(n, k=1)] = -np.inf                   # additive: 0 on/below the diagonal, -inf above it
+    return mask
 
 
-def self_attention(X, Wq, Wk, Wv, causal=False):
+def self_attention(X, mask=None):
     X = np.asarray(X, dtype=float)
-    Q, K, V = X @ Wq, X @ Wk, X @ Wv                         # Q, K and V all come from the SAME sequence
-    mask = None
-    if causal:
-        n = X.shape[0]
-        mask = np.zeros((n, n))
-        mask[np.triu_indices(n, k=1)] = -np.inf
-    return attention(Q, K, V, mask)
+    scores = X @ X.T / np.sqrt(X.shape[-1])                   # Q, K and V are all X
+    if mask is not None:
+        scores = scores + mask
+    weights = softmax(scores, axis=-1)
+    return weights @ X, weights                               # weights is (n, n)
 
 
-def cross_attention(X_dec, X_enc, Wq, Wk, Wv):
-    Q = np.asarray(X_dec, dtype=float) @ Wq                  # queries from the decoder
-    K = np.asarray(X_enc, dtype=float) @ Wk                  # keys and values from the encoder
-    V = np.asarray(X_enc, dtype=float) @ Wv
-    return attention(Q, K, V, None)
+def cross_attention(X, context):
+    X, context = np.asarray(X, dtype=float), np.asarray(context, dtype=float)
+    scores = X @ context.T / np.sqrt(X.shape[-1])             # queries from X, keys/values from the context, no mask
+    weights = softmax(scores, axis=-1)                        # (n_q, n_ctx)
+    return weights @ context, weights                         # out is (n_q, d)
 
 
-def future_leakage(weights):
-    w = np.asarray(weights, dtype=float)
-    if w.shape[0] < 2:
-        return 0.0
-    return float(np.max(np.triu(w, k=1)))                    # biggest weight on a future position
+def audit_future_leakage(weights):
+    weights = np.asarray(weights, dtype=float)
+    return bool(np.any(np.triu(weights, k=1) > 0))            # True if any token attends strictly ahead
 
 
 if __name__ == "__main__":
-    rng = np.random.RandomState(3)
-    X = rng.randn(6, 4); Wq = rng.randn(4, 4); Wk = rng.randn(4, 4); Wv = rng.randn(4, 4)
-    _, w_causal = self_attention(X, Wq, Wk, Wv, causal=True)
-    _, w_full = self_attention(X, Wq, Wk, Wv, causal=False)
-    print(round(future_leakage(w_causal), 6), future_leakage(w_full) > 0)        # 0.0 True
-    print(np.allclose(w_causal.sum(axis=1), 1), np.allclose(w_full.sum(axis=1), 1))
-    Xd = rng.randn(3, 4); Xe = rng.randn(7, 4)
-    out, wc = cross_attention(Xd, Xe, np.eye(4), np.eye(4), np.eye(4))
-    print(wc.shape, out.shape)                                                   # (3, 7) (3, 4)
-    print(np.allclose(out, wc @ Xe), np.allclose(wc, softmax(Xd @ Xe.T / 2.0)))  # True True
-    Q, K, V = rng.randn(2, 5), rng.randn(4, 5), rng.randn(4, 3)
-    o, a = attention(Q, K, V)
-    print(o.shape, a.shape, np.allclose(o, softmax(Q @ K.T / np.sqrt(5)) @ V))   # (2, 3) (2, 4) True
+    out, w_full = self_attention(X)
+    out, w_causal = self_attention(X, mask=causal_mask(3))
+    print(audit_future_leakage(w_causal))                     # False
+    print(audit_future_leakage(w_full))                       # True
+    out, w = cross_attention(X, ctx)
+    print(w.shape, out.shape)                                 # (3, 5) (3, 4)
+    print(np.round(w.sum(axis=1), 6), np.round(w_causal.sum(axis=1), 6))      # rows sum to 1

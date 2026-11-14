@@ -2,52 +2,49 @@
 import re
 
 import numpy as np
+from sklearn.decomposition import PCA
+
+vocab = ["good", "great", "bad", "movie", "film", "popcorn"]
+embeddings = np.array([
+    [1.0, 0.0, 0.0],      # good
+    [0.9, 0.1, 0.0],      # great
+    [-1.0, 0.0, 0.0],     # bad
+    [0.0, 1.0, 0.0],      # movie
+    [0.0, 0.9, 0.1],      # film
+    [0.0, 0.0, 1.0],      # popcorn
+], dtype=float)
 
 
 def tokenize(sentence):
-    return re.findall(r"[a-z0-9]+", str(sentence).lower())
+    return re.findall(r"[a-z0-9]+", sentence.lower())
 
 
 def embed_document(sentence, embeddings, vocab):
     embeddings = np.asarray(embeddings, dtype=float)
     index = {w: i for i, w in enumerate(vocab)}
-    vectors = [embeddings[index[t]] for t in tokenize(sentence) if t in index]    # skip out-of-vocabulary tokens
+    vectors = [embeddings[index[t]] for t in tokenize(sentence) if t in index]      # skip out-of-vocabulary tokens
     if not vectors:
-        return np.zeros(embeddings.shape[1])
-    return np.mean(vectors, axis=0)
-
-
-def document_similarity(s1, s2, embeddings, vocab):
-    a = embed_document(s1, embeddings, vocab)
-    b = embed_document(s2, embeddings, vocab)
-    na, nb = np.linalg.norm(a), np.linalg.norm(b)
-    if na == 0 or nb == 0:
-        return 0.0
-    return float(np.dot(a, b) / (na * nb))
+        return np.zeros(embeddings.shape[1])                                         # nothing known: a zero vector
+    return np.mean(vectors, axis=0)                                                  # mean-pool the word vectors
 
 
 def pca_2d(X):
-    X = np.asarray(X, dtype=float)
-    Xc = X - X.mean(axis=0)                                  # centre the data
-    _, _, Vt = np.linalg.svd(Xc, full_matrices=False)        # rows of Vt = principal directions, by variance
-    return Xc @ Vt[:2].T
+    return PCA(n_components=2).fit_transform(np.asarray(X, dtype=float))             # (n_docs, 2); sklearn centres the data
+
+
+def explained_variance_2d(X):
+    pca = PCA(n_components=2).fit(np.asarray(X, dtype=float))
+    return float(np.sum(pca.explained_variance_ratio_))                              # share of variance the 2-D plot keeps
 
 
 if __name__ == "__main__":
-    vocab = ["good", "great", "bad", "movie", "film", "popcorn"]
-    embeddings = np.array([[1.0, 0.0, 0.0], [0.9, 0.1, 0.0], [-1.0, 0.0, 0.0],
-                           [0.0, 1.0, 0.0], [0.0, 0.9, 0.1], [0.0, 0.0, 1.0]], dtype=float)
-    print(tokenize("Good, GREAT movie!!"), tokenize("...!?"), tokenize(""))      # ['good', 'great', 'movie'] [] []
-    print(embed_document("good movie", embeddings, vocab))                        # [0.5 0.5 0. ]
-    print(embed_document("good movie zzz qqq", embeddings, vocab))                # same, OOV ignored
-    print(embed_document("zzz qqq", embeddings, vocab))                           # [0. 0. 0.]
-    print(round(document_similarity("good movie", "great film", embeddings, vocab), 2),
-          round(document_similarity("good movie", "bad movie", embeddings, vocab), 2))   # ~0.95 ~0.0
-    Z = pca_2d(np.random.RandomState(0).randn(50, 5))
-    print(Z.shape, np.allclose(Z.mean(0), 0), Z[:, 0].var() >= Z[:, 1].var())     # (50, 2) True True
-    rng = np.random.RandomState(1)
-    base = rng.randn(30, 2) * [3.0, 1.0]
-    X = base @ rng.randn(2, 6)                                                    # rank-2 data in 6-D
-    Z2 = pca_2d(X)
-    d = lambda A: np.linalg.norm(A[:, None] - A[None], axis=-1)
-    print(np.allclose(d(X), d(Z2)))                                               # True (distances preserved)
+    print(tokenize("Good, GREAT movie!!"))                                          # ['good', 'great', 'movie']
+    print(embed_document("good movie", embeddings, vocab))                          # [0.5 0.5 0. ]
+    print(embed_document("zzz qqq", embeddings, vocab))                             # [0. 0. 0.]
+    docs = ["good movie", "great film", "bad movie", "popcorn", "good great"]
+    X = np.vstack([embed_document(s, embeddings, vocab) for s in docs])
+    Z = pca_2d(X)
+    print(Z.shape, np.allclose(Z.mean(axis=0), 0))                                  # (5, 2) True
+    print(round(explained_variance_2d(X), 3), tokenize("?!"))                       # a value in [0, 1], []
+    flat = np.column_stack([np.arange(6.0), 2 * np.arange(6.0), np.zeros(6)])       # intrinsically 1-D data
+    print(round(explained_variance_2d(flat), 3))                                    # ~1.0

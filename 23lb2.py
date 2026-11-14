@@ -1,36 +1,26 @@
 """Day 23 / Session 1 - Lab Assignment 2: Why Non-Saturating? Generator Gradient Strength vs Discriminator Confidence."""
 import numpy as np
 
-
-def sigmoid(x):
-    x = np.asarray(x, dtype=float)
-    e = np.exp(-np.abs(x))
-    return np.where(x >= 0, 1.0 / (1.0 + e), e / (1.0 + e))
+d_fake = np.array([0.01, 0.25, 0.5, 0.75, 0.99])      # D(fake): near 0 = confident fake, near 1 = generator fooled D
 
 
-def grad_saturating_wrt_logit(fake_logits):
-    return -sigmoid(fake_logits)                     # d/ds log(1 - D) = -D
+def grad_saturating(d_fake):
+    return -np.asarray(d_fake, dtype=float)             # d/ds log(1 - D) = -D
 
 
-def grad_nonsaturating_wrt_logit(fake_logits):
-    return sigmoid(fake_logits) - 1.0                # d/ds (-log D) = D - 1
+def grad_nonsaturating(d_fake):
+    return np.asarray(d_fake, dtype=float) - 1.0        # d/ds (-log D) = D - 1
 
 
-def grad_magnitude_ratio(fake_logits):
-    s = np.asarray(fake_logits, dtype=float)
-    with np.errstate(over="ignore"):
-        return np.exp(-s)                            # |D - 1| / |D| = (1 - D) / D = exp(-s)
-
-
-def stronger_gradient(fake_logits):
-    return grad_magnitude_ratio(fake_logits) > 1.0   # True exactly where D < 0.5
+def nonsat_is_stronger(d_fake):
+    d_fake = np.asarray(d_fake, dtype=float)
+    return np.abs(grad_nonsaturating(d_fake)) > np.abs(grad_saturating(d_fake))     # i.e. d_fake < 0.5
 
 
 if __name__ == "__main__":
-    fake_logits = np.array([-6.0, -2.0, 0.0, 2.0, 6.0])
-    print(np.round(grad_saturating_wrt_logit(fake_logits), 4))        # [-0.0025 -0.1192 -0.5 -0.8808 -0.9975]
-    print(np.round(grad_nonsaturating_wrt_logit(fake_logits), 4))     # [-0.9975 -0.8808 -0.5 -0.1192 -0.0025]
-    print(np.round(grad_magnitude_ratio(fake_logits), 3))             # [403.429 7.389 1. 0.135 0.002]
-    print(stronger_gradient(fake_logits))                             # [ True True False False False]
-    gs, gn = grad_saturating_wrt_logit(fake_logits), grad_nonsaturating_wrt_logit(fake_logits)
-    print(np.allclose(np.abs(gs) + np.abs(gn), 1), np.allclose(np.abs(gn) / np.abs(gs), grad_magnitude_ratio(fake_logits)))   # True True
+    print(np.round(grad_saturating(d_fake), 4))                              # [-0.01 -0.25 -0.5  -0.75 -0.99]
+    print(np.round(grad_nonsaturating(d_fake), 4))                           # [-0.99 -0.75 -0.5  -0.25 -0.01]
+    print(nonsat_is_stronger(d_fake))                                        # [ True  True False False False]
+    print(abs(grad_saturating(np.array([0.01]))[0]))                         # 0.01
+    print(abs(grad_nonsaturating(np.array([0.01]))[0]))                      # 0.99
+    print(np.allclose(np.abs(grad_saturating(d_fake)) + np.abs(grad_nonsaturating(d_fake)), 1))   # True

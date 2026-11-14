@@ -1,43 +1,35 @@
 """Day 23 / Session 3 - Lab Assignment 1: Mode Coverage & Nearest-Neighbour Distance for Generative Quality."""
 import numpy as np
+from sklearn.datasets import make_blobs
+from sklearn.neighbors import NearestNeighbors
+
+centers = np.array([[0., 0.], [5., 0.], [0., 5.], [5., 5.]])      # 4 ground-truth modes
+real, _ = make_blobs(n_samples=400, centers=centers, cluster_std=0.3, random_state=0)
+gen, _ = make_blobs(n_samples=400, centers=centers, cluster_std=0.3, random_state=1)    # a healthy generator
 
 
-def pairwise_dist(A, B):
-    A = np.asarray(A, dtype=float)
-    B = np.asarray(B, dtype=float)
-    diff = A[:, None, :] - B[None, :, :]                 # (n, m, d)
-    return np.sqrt(np.sum(diff ** 2, axis=-1))           # D[i, j] = ||A[i] - B[j]||_2
+def nn_distance(real, gen):
+    nn = NearestNeighbors(n_neighbors=1).fit(real)
+    dists, _ = nn.kneighbors(gen)
+    return float(dists.ravel().mean())                            # mean distance from a generated point to its closest real point
 
 
-def nn_distance(gen, real):
-    D = pairwise_dist(gen, real)
-    return float(np.mean(D.min(axis=1)))                 # closest real sample for each generated one, averaged
-
-
-def assign_to_mode(points, modes):
-    return np.argmin(pairwise_dist(points, modes), axis=1).astype(int)
-
-
-def count_covered_modes(gen, modes, radius):
-    D = pairwise_dist(modes, gen)                        # (K, n)
-    return int(np.sum(D.min(axis=1) <= radius))          # modes with at least one generated sample nearby
-
-
-def mode_coverage(gen, modes, radius):
-    return count_covered_modes(gen, modes, radius) / len(modes)
+def mode_coverage(real_centers, gen, radius):
+    nn = NearestNeighbors(n_neighbors=1).fit(gen)                 # index on the generated points
+    dists, _ = nn.kneighbors(np.asarray(real_centers, dtype=float))
+    return float((dists.ravel() <= radius).mean())                # fraction of modes with a generated point within radius
 
 
 if __name__ == "__main__":
+    r = np.random.RandomState(0).randn(40, 2)
+    print(round(nn_distance(r, r), 6))                                                         # 0.0
+    grid = np.array([[i * 3., j * 3.] for i in range(5) for j in range(5)])
+    print(round(nn_distance(grid, grid + np.array([0., 0.5])), 3))                             # ~0.5
     rng = np.random.RandomState(0)
-    modes = np.array([[0., 0.], [5., 0.], [0., 5.], [5., 5.]])
-    real = rng.randn(40, 2)
-    print(round(nn_distance(real, real), 6))                                       # 0.0
-    print(round(nn_distance(real + np.array([0., 0.5]), real), 3))                 # ~0.5 or below (nearest neighbour)
-    gen_good = np.vstack([m + 0.2 * rng.randn(30, 2) for m in modes])
-    gen_bad = modes[0] + 0.2 * rng.randn(120, 2)
-    print(mode_coverage(gen_good, modes, radius=1.0), mode_coverage(gen_bad, modes, radius=1.0))   # 1.0 0.25
-    A, B = rng.randn(5, 3), rng.randn(4, 3)
-    brute = np.array([[np.linalg.norm(a - b) for b in B] for a in A])
-    print(pairwise_dist(A, B).shape, np.allclose(pairwise_dist(A, B), brute))      # (5, 4) True
-    print(assign_to_mode(np.array([[0.1, 0.2], [4.8, 5.1], [0.2, 4.9]]), modes))   # [0 3 2]
-    print(mode_coverage(gen_good, modes, 0.0001), mode_coverage(gen_good, modes, 100.0))   # 0.0 1.0
+    gen_good = np.vstack([c + 0.1 * rng.randn(30, 2) for c in centers])
+    gen_bad = centers[0] + 0.1 * rng.randn(120, 2)
+    print(mode_coverage(centers, gen_good, radius=1.0))                                        # 1.0
+    print(mode_coverage(centers, gen_bad, radius=1.0))                                         # 0.25
+    print(mode_coverage(centers, gen_bad, radius=10.0), mode_coverage(centers, gen_bad, radius=0.0))   # 1.0 0.0 (radius sensitivity)
+    brute = np.mean([np.min(np.linalg.norm(real - g, axis=1)) for g in gen])
+    print(np.isclose(nn_distance(real, gen), brute))                                           # True (matches brute force)

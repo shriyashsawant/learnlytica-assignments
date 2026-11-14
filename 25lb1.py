@@ -1,47 +1,39 @@
 """Day 25 / Session 1 - Lab Assignment 1: Causal Scaled Dot-Product Self-Attention from Scratch."""
 import numpy as np
 
-
-def linear_project(X, W):
-    return np.asarray(X, dtype=float) @ np.asarray(W, dtype=float)
-
-
-def scaled_scores(Q, K):
-    Q = np.asarray(Q, dtype=float)
-    K = np.asarray(K, dtype=float)
-    return Q @ K.T / np.sqrt(Q.shape[-1])                    # Q K^T / sqrt(d_k)
-
-
-def causal_mask(n):
-    mask = np.zeros((n, n))
-    mask[np.triu_indices(n, k=1)] = -np.inf                  # strictly above the diagonal = the future
-    return mask
+Q = np.array([[1., 0., 0.], [0., 1., 0.], [1., 1., 0.], [0., 1., 1.]])      # (4, 3)
+K = np.array([[1., 0., 1.], [0., 1., 0.], [1., 1., 0.], [0., 0., 1.]])      # (4, 3)
+V = np.array([[1., 2.], [0., 1.], [2., 0.], [1., 1.]])                      # (4, 2)
 
 
 def softmax(z, axis=-1):
     z = np.asarray(z, dtype=float)
-    e = np.exp(z - np.max(z, axis=axis, keepdims=True))      # -inf entries become exp(-inf) = 0
-    return e / np.sum(e, axis=axis, keepdims=True)
+    shifted = z - np.max(z, axis=axis, keepdims=True)         # subtract the max for stability; -inf stays -inf
+    e = np.exp(shifted)                                       # exp(-inf) = 0, so masked entries get weight 0
+    return e / e.sum(axis=axis, keepdims=True)
 
 
-def causal_self_attention(X, Wq, Wk, Wv):
-    Q = linear_project(X, Wq)
-    K = linear_project(X, Wk)
-    V = linear_project(X, Wv)
-    scores = scaled_scores(Q, K) + causal_mask(len(X))
-    weights = softmax(scores, axis=-1)
+def causal_mask(n):
+    mask = np.zeros((n, n))
+    mask[np.triu_indices(n, k=1)] = -np.inf                   # -inf strictly above the diagonal, 0.0 on and below it
+    return mask
+
+
+def attention(Q, K, V, mask=None):
+    Q, K, V = (np.asarray(a, dtype=float) for a in (Q, K, V))
+    d = Q.shape[-1]
+    scores = Q @ K.T / np.sqrt(d)
+    if mask is not None:
+        scores = scores + mask
+    weights = softmax(scores, axis=-1)                        # row-stochastic
     return weights @ V, weights
 
 
 if __name__ == "__main__":
-    rng = np.random.RandomState(0)
-    X = rng.randn(6, 4); Wq = rng.randn(4, 4); Wk = rng.randn(4, 4); Wv = rng.randn(4, 5)
-    out, w = causal_self_attention(X, Wq, Wk, Wv)
-    print(out.shape, w.shape)                                # (6, 5) (6, 6)
-    print(np.round(w.sum(axis=1), 6))                        # all 1
-    print(np.round(w[0], 3), (w > 0).sum(axis=1))            # [1. 0. 0. 0. 0. 0.] [1 2 3 4 5 6]
-    print(np.allclose(np.triu(w, 1), 0))                     # True
+    out, w = attention(Q, K, V, causal_mask(4))
+    print(out.shape, w.shape)                                 # (4, 2) (4, 4)
+    print(np.round(w.sum(axis=1), 6))                         # [1. 1. 1. 1.]
+    print(np.round(w[0], 3))                                  # [1. 0. 0. 0.]
+    print(np.allclose(np.triu(w, 1), 0))                      # True
     print(causal_mask(3))
-    from scipy.special import softmax as sp_softmax
-    z = rng.randn(4, 5)
-    print(np.allclose(softmax(z), sp_softmax(z, axis=-1)), np.allclose(scaled_scores(X, X), X @ X.T / 2.0))   # True True
+    print(np.round(softmax(np.array([[1000.0, 1001.0, -np.inf]])), 4))        # stable, -inf -> 0

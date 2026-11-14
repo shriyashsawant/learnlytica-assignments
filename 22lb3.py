@@ -2,48 +2,34 @@
 import numpy as np
 
 
-def stable_softmax(x, axis=-1):
+def softmax(x):
     x = np.asarray(x, dtype=float)
-    e = np.exp(x - np.max(x, axis=axis, keepdims=True))       # subtract the max so nothing overflows
-    return e / np.sum(e, axis=axis, keepdims=True)
+    z = np.exp(x - np.max(x))                       # subtract the max so large logits do not overflow
+    return z / z.sum()
 
 
-def bahdanau_scores(query, keys, W_q, W_k, v_vec):
-    # e_i = v . tanh(W_q q + W_k k_i)
-    hidden = np.tanh(np.asarray(W_q) @ np.asarray(query) + np.asarray(keys) @ np.asarray(W_k).T)   # (T, d_a)
-    return hidden @ np.asarray(v_vec)                                                           # (T,)
+def attention_scores(h_dec, H_enc, W1, W2, v):
+    h_dec, H_enc = np.asarray(h_dec, dtype=float), np.asarray(H_enc, dtype=float)
+    return np.tanh(H_enc @ np.asarray(W1) + h_dec @ np.asarray(W2)) @ np.asarray(v, dtype=float)   # (T,)
 
 
-def attention_weights(scores):
-    return stable_softmax(scores)
-
-
-def context_vector(weights, values):
-    return np.asarray(weights) @ np.asarray(values)           # weighted sum of the value rows, (d_v,)
-
-
-def alignment_matrix(queries, keys, W_q, W_k, v_vec):
-    return np.array([attention_weights(bahdanau_scores(q, keys, W_q, W_k, v_vec)) for q in np.asarray(queries)])
+def attention(h_dec, H_enc, W1, W2, v):
+    weights = softmax(attention_scores(h_dec, H_enc, W1, W2, v))     # alignment weights, sum to 1
+    context = weights @ np.asarray(H_enc, dtype=float)               # (d,)
+    return weights, context
 
 
 if __name__ == "__main__":
-    rng = np.random.default_rng(7)
-    d_q, d_k, d_a, d_v, T = 4, 3, 5, 6, 5
-    query = rng.normal(size=d_q)
-    keys = rng.normal(size=(T, d_k))
-    values = rng.normal(size=(T, d_v))
-    W_q = rng.normal(size=(d_a, d_q))
-    W_k = rng.normal(size=(d_a, d_k))
-    v_vec = rng.normal(size=d_a)
-    queries = rng.normal(size=(3, d_q))
-    e = bahdanau_scores(query, keys, W_q, W_k, v_vec)
-    w = attention_weights(e)
-    print(e.shape, w.shape, round(float(w.sum()), 6))                         # (5,) (5,) 1.0
-    manual = [float(v_vec @ np.tanh(W_q @ query + W_k @ keys[i])) for i in range(T)]
-    print(np.allclose(e, manual))                                             # True
-    c = context_vector(w, values)
-    print(c.shape, np.allclose(c, sum(w[i] * values[i] for i in range(T))))   # (6,) True
-    Aln = alignment_matrix(queries, keys, W_q, W_k, v_vec)
-    print(Aln.shape, np.allclose(Aln.sum(axis=1), 1))                         # (3, 5) True
-    print(attention_weights(bahdanau_scores(query, keys, W_q, W_k, np.zeros(5))))           # [0.2 0.2 0.2 0.2 0.2]
-    print(np.isfinite(stable_softmax(np.array([1000.0, 1001.0]))).all(), np.allclose(stable_softmax([1, 2, 3]), stable_softmax([101, 102, 103])))   # True True
+    H_enc = np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
+    W1 = np.array([[1.0, 0.0], [0.0, 1.0]])
+    W2 = np.array([[1.0, 0.0], [0.0, 1.0]])
+    h_dec = np.array([0.5, 0.5])
+    v = np.array([1.0, 1.0])
+    e = attention_scores(h_dec, H_enc, W1, W2, v)
+    print(e.shape)                                                   # (3,)
+    w, c = attention(h_dec, H_enc, W1, W2, v)
+    print(round(float(w.sum()), 6), c.shape)                         # 1.0 (2,)
+    w0, c0 = attention(h_dec, H_enc, W1, W2, np.zeros(2))
+    print(w0)                                                        # [0.33333333 0.33333333 0.33333333]
+    print(np.allclose(c0, H_enc.mean(axis=0)))                       # True
+    print(softmax([1000.0, 1001.0]), np.round(e, 4))                 # no nan on large logits

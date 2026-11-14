@@ -1,33 +1,36 @@
 """Day 27 / Session 3 - Lab Assignment 1: Classifier-Free Guidance - Steering Diffusion Toward the Prompt."""
 import numpy as np
 
+rng = np.random.RandomState(0)
+eps_uncond = rng.randn(4, 16, 16)          # U-Net output for the empty prompt
+eps_cond = rng.randn(4, 16, 16)            # U-Net output for the real prompt
+
 
 def cfg_combine(eps_uncond, eps_cond, w):
-    u = np.asarray(eps_uncond, dtype=float)
-    c = np.asarray(eps_cond, dtype=float)
-    return u + w * (c - u)                                   # w=0 -> unconditional, w=1 -> conditional, w>1 extrapolates
+    eps_uncond, eps_cond = np.asarray(eps_uncond, dtype=float), np.asarray(eps_cond, dtype=float)
+    return eps_uncond + w * (eps_cond - eps_uncond)           # w=0 unconditional, w=1 conditional, w>1 extrapolates
 
 
 def conditional_direction(eps_uncond, eps_cond):
-    return np.asarray(eps_cond, dtype=float) - np.asarray(eps_uncond, dtype=float)
+    return np.asarray(eps_cond, dtype=float) - np.asarray(eps_uncond, dtype=float)    # the "toward the prompt" vector
 
 
 def guidance_projection(eps_uncond, eps_cond, w):
     d = conditional_direction(eps_uncond, eps_cond).ravel()
     norm = np.linalg.norm(d)
     if norm == 0:
-        return 0.0
+        return 0.0                                            # the two predictions are identical
     guided = cfg_combine(eps_uncond, eps_cond, w).ravel()
-    return float(np.dot(guided, d / norm))
+    return float(np.dot(guided, d / norm))                    # projection onto the unit prompt direction
 
 
 def guidance_alignment(eps_uncond, eps_cond, w):
     d = conditional_direction(eps_uncond, eps_cond).ravel()
-    g = cfg_combine(eps_uncond, eps_cond, w).ravel()
-    nd, ng = np.linalg.norm(d), np.linalg.norm(g)
+    guided = cfg_combine(eps_uncond, eps_cond, w).ravel()
+    nd, ng = np.linalg.norm(d), np.linalg.norm(guided)
     if nd == 0 or ng == 0:
         return 0.0
-    return float(np.dot(g, d) / (nd * ng))
+    return float(np.clip(np.dot(guided, d) / (ng * nd), -1.0, 1.0))      # cosine similarity in [-1, 1]
 
 
 def alignment_curve(eps_uncond, eps_cond, ws):
@@ -35,15 +38,17 @@ def alignment_curve(eps_uncond, eps_cond, ws):
 
 
 if __name__ == "__main__":
-    u = np.array([1.0, 0.0]); c = np.array([1.0, 1.0])
-    print(cfg_combine(u, c, 0.0), cfg_combine(u, c, 1.0))                  # [1. 0.] [1. 1.]
-    print(guidance_projection(u, c, 3.0))                                  # 3.0
-    print(round(guidance_alignment(u, c, 0.0), 3), round(guidance_alignment(u, c, 1.0), 3))   # 0.0 0.707
-    print(np.round(alignment_curve(u, c, [0, 1, 2, 4, 8]), 3))             # [0. 0.707 0.894 0.97 0.992]
-    rng = np.random.RandomState(0)
-    eu, ec = rng.randn(4, 16, 16), rng.randn(4, 16, 16)
-    print(cfg_combine(eu, ec, 7.5).shape, np.allclose(cfg_combine(eu, ec, 7.5), eu + 7.5 * (ec - eu)))   # (4, 16, 16) True
-    print(np.allclose(conditional_direction(eu, ec), ec - eu))             # True
-    d = (ec - eu).ravel()
-    print(np.isclose(guidance_projection(eu, ec, 2.0), np.dot(cfg_combine(eu, ec, 2.0).ravel(), d / np.linalg.norm(d))))   # True
-    print(guidance_projection(eu, eu, 5.0), bool(np.all(np.diff(alignment_curve(eu, ec, [0, 1, 2, 4, 8, 16])) > 0)))      # 0.0 and monotone (once past w=0)
+    u = np.array([1.0, 0.0]); c = np.array([1.0, 1.0])        # direction d = [0, 1]
+    print(cfg_combine(u, c, 0.0))                              # [1. 0.]
+    print(cfg_combine(u, c, 1.0))                              # [1. 1.]
+    print(guidance_projection(u, c, 3.0))                      # 3.0
+    print(round(guidance_alignment(u, c, 0.0), 3))             # 0.0
+    print(round(guidance_alignment(u, c, 1.0), 3))             # 0.707
+    print(np.round(alignment_curve(u, c, [0, 1, 2, 4, 8]), 3)) # [0.    0.707 0.894 0.97  0.992]
+    out = cfg_combine(eps_uncond, eps_cond, 7.5)
+    print(out.shape, np.allclose(out, eps_uncond + 7.5 * (eps_cond - eps_uncond)))     # (4, 16, 16) True
+    print(np.allclose(cfg_combine(eps_uncond, eps_cond, 0), eps_uncond), np.allclose(cfg_combine(eps_uncond, eps_cond, 1), eps_cond))
+    print(np.allclose(conditional_direction(eps_uncond, eps_cond), eps_cond - eps_uncond), round(guidance_projection(eps_uncond, eps_cond, 7.5), 4))
+    curve = alignment_curve(eps_uncond, eps_cond, [0, 1, 2, 4, 8, 50])
+    print(np.round(curve, 3), bool(np.all(np.diff(curve) > 0)))
+    print(guidance_projection(u, u, 2.0), guidance_alignment(u, u, 2.0))               # 0.0 0.0
